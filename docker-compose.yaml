@@ -28,10 +28,6 @@ services:
       - test_tick_api
       - redis
       - db
-
-
-
-
   db:
     image: postgres:16.0-alpine3.17
     restart: always
@@ -64,3 +60,15 @@ services:
       - test_tick_api
       - redis
       - db
+
+  flower:
+    build:
+        context: .
+        dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "5555:5555"
+    command: "celery -A test_tick_api flower --address=0.0.0.0"
+    depends_on:
+      - celery_worker
