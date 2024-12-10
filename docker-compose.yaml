@@ -1,0 +1,74 @@
+services:
+  test_tick_api:
+    build:
+      context: .
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python manage.py wait_for_db &&
+      python manage.py migrate &&
+      python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+
+  celery_worker:
+    build:
+        context: .
+        dockerfile: Dockerfile
+    command: "celery -A test_tick_api worker -l info"
+
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      - test_tick_api
+      - redis
+      - db
+  db:
+    image: postgres:16.0-alpine3.17
+    restart: always
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+    env_file:
+      - .env
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:latest
+    restart: always
+
+    ports:
+      - "6379:6379"
+
+  celery_beat:
+    build:
+        context: .
+        dockerfile: Dockerfile
+    command: >
+       sh -c "python manage.py wait_for_db &&
+       python manage.py migrate django_celery_beat &&
+       celery -A test_tick_api beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      - test_tick_api
+      - redis
+      - db
+
+  flower:
+    build:
+        context: .
+        dockerfile: Dockerfile
+    env_file:
+      - .env
+    ports:
+      - "5555:5555"
+    command: "celery -A test_tick_api flower --address=0.0.0.0"
+    depends_on:
+      - celery_worker
